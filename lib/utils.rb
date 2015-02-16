@@ -3,6 +3,10 @@ module RbMake
 module Impl
 module Utils
 
+  def self.caller_file()
+    return caller[1].split(":")[0..1]
+  end
+
   def attr_forwarder(*args)
     args.each do |arg|
       

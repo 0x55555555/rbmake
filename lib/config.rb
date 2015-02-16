@@ -17,11 +17,11 @@ class Config
   end
 
   def debug(on=true)
-    return Condition.new("debug=#{on}")
+    return Condition.new("debug", on)
   end
 
   def platform(id)
-    return Condition.new("platform=#{id}")
+    return Condition.new("platform", id)
   end
 end
 

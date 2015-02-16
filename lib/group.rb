@@ -9,7 +9,7 @@ class Group
   attr_accessor :condition
 
   extend Utils
-  attr_forwarder :sources, :include_paths, :dependencies, :flags, :libraries
+  attr_forwarder :sources, :include_paths, :dependencies, :flags, :libraries, :debug_generate
 
   def initialize(registry, mod, name, parent)
     @registry = registry
@@ -25,16 +25,27 @@ class Group
     @name = name
     @parent = parent
     @owner_module = mod
+    if (parent == nil)
+      @debug_generate = false
+    end
+  end
+
+  def path
+    p = "[#{@name}]"
+    if (@parent)
+      p = @parent.path + p
+    end
+    return p
   end
 
   def when(cond_input)
     cond = Condition.wrap(cond_input)
-    grp = @groups[cond.name]
+    grp = @groups[cond.to_s]
     if (grp == nil)
-      grp = Group.new(@registry, @module, cond.name, self)
+      grp = Group.new(@registry, @module, cond.to_s, self)
       grp.condition = cond
 
-      @groups[cond.name] = grp
+      @groups[cond.to_s] = grp
       yield(grp) if block_given?
     end
 
