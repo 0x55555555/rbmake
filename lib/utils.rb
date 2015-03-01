@@ -3,8 +3,8 @@ module RbMake
 module Impl
 module Utils
 
-  def self.caller_file()
-    return caller[1].split(":")[0..1]
+  def self.caller_file(plus=0)
+    return caller[plus+1].split(":")[0..1]
   end
 
   def attr_forwarder(*args)
@@ -12,7 +12,7 @@ module Utils
       
       var_name = "@#{arg}"
 
-      #Here's the getter
+      # Here's the getter
       define_method(arg) do
         val = instance_variable_get(var_name)
         if (@parent && val == nil)

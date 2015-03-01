@@ -12,17 +12,15 @@ class Module < Group
   attr_forwarder :root, :type
 
   def initialize(registry, name, parent)
-    super(registry, self, name, parent)
+    super(registry, self, name, parent, nil)
 
     @root = ''
     @generate = false
     @definition = nil
-
-    @registry.register_module(self)
   end
 
   def build(loc, block)
-    loc_splits = loc[0].split(":")
+    loc_splits = Utils::caller_file(1)
     file = loc_splits[0]
     @definition = { :file => file, :line => loc_splits[1].to_i }
 
@@ -32,16 +30,33 @@ class Module < Group
       .relative_path_from(Pathname.new(root))
       .cleanpath.to_s
 
+    @registry.register_module(self)
     block.call(self, parent)
+
+    resolve_dependencies()
+
+    if (type != :dummy && generate)
+      export = group(:export)
+      export.libraries << name
+    end
   end
 
   def extend_with(helper_id)
     helper = @registry.lookup_helper(helper_id)
-    @helpers[helper.name] = helper.create(@parent.first_helper(helper_id))
+    if (@parent)
+      parent_helper = @parent.first_helper(helper_id)
+    end
+    add_helper(helper.name, helper.class.new(self, parent_helper, parent_helper))
   end
 
   def config
     return @registry.config
+  end
+
+  def export
+    return group(:export) do |l|
+      yield l
+    end
   end
 end
 

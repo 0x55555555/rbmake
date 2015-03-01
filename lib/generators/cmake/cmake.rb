@@ -1,6 +1,8 @@
 require 'pathname'
 require 'module'
 
+$:.unshift File.dirname(__FILE__)
+
 RbMakeCMakeLocation = File.dirname(__FILE__)
 
 TypeMap = {
@@ -8,16 +10,35 @@ TypeMap = {
 }
 
 TargetTypeMap = {
-  :dynamic_library => 'SHARED',
-  :static_library => 'STATIC',
-  :module => 'MODULE',
+  :dummy => nil,
+  :application => { :primary => 'add_executable' },
+  :dynamic_library => { :primary => 'add_library', :secondary => 'SHARED' },
+  :static_library => { :primary => 'add_library', :secondary => 'STATIC' },
+  :module => { :primary => 'add_library', :secondary => 'MODULE' },
 }
 
-def prop(mod, obj, prop)
+def prop(obj, prop)
+  raise "Invalid object" unless obj
   this = obj.method(prop).call
 
-  if (!mod)
-    parent = obj.parent.method(prop).call
+  if (block_given?)
+    this = yield this
+  end
+
+  if (!this)
+    return nil
+  end
+
+  if (obj.resolve_parent)
+    parent = obj.resolve_parent.method(prop).call
+    if (!parent)
+      return nil
+    end
+
+    if (block_given?)
+      parent = yield parent
+    end
+
     return this - parent
   end
 
@@ -40,15 +61,15 @@ end
 def generate_flag(output, f)
   case f
   when :cpp14
-    output.puts("if(DEFINED RBMAKE_GCCLIKE)\n  add_definitions(-std=c++1y)\nendif()") 
+    output.append_to_variable(:compiler_options, "-std=c++1y")
   when :cpp11
-    output.puts("if(DEFINED RBMAKE_GCCLIKE)\n  add_definitions(-std=c++11)\nendif()") 
+    output.append_to_variable(:compiler_options, "-std=c++11")
 
   when :warn_as_error
     output.append_to_variable(:compiler_options, "${RBMAKE_WARN_ALL}")
 
   else
-    output.append_to_variable(:compiler_options, "\" #{f}\"")
+    output.append_to_variable(:compiler_options, "#{f}")
   end
 end
 
@@ -59,84 +80,134 @@ def debug_variable(hdr, id, val)
   puts "#{hdr}#{id}(#{val})"
 end
 
-def generate_group(output, conf, root, grp, depth)
+def expand_sources(root, src)
+  if (!src)
+    return []
+  end
+
+  neat_src = src.map do |g| 
+    path = root + "/" + g
+    if (!File.exist?(path))
+      glob = Dir[path]
+      raise "Invalid dir glob '#{path}' - no source files found" unless glob.length > 0
+      next glob
+    end
+
+    next path
+  end
+
+  files = neat_src.flatten
+  return files.select{ |f| !Dir.exist?(f) }
+end
+
+def expand_include_path(root, paths)
+  paths.map do |path|
+    if (path[0] == '$' || Pathname.new(path).absolute?)
+      next path
+    end
+
+    next "#{root}/#{path}"
+  end
+end
+
+def generate_group(generated, output, conf, root, root_mod, grp, depth)
+  if (generated.include?(grp))
+    return
+  end
+  generated << grp
+
   mod = grp.is_a?(RbMake::Impl::Module)
   cpp = grp.first_helper(:cpp)
+  if (grp.name == :export && grp == root_mod.lookup_group(:export))
+    return
+  end
+
+  include_paths = prop(grp, :include_paths) do |i|
+    next expand_include_path(grp.root, i)
+  end
 
   values = {
     :condition => grp.condition,
-    :dependencies => prop(mod, grp, :dependencies),
-    :sources => prop(mod, grp, :sources),
-    :libraries => prop(mod, grp, :libraries),
-    :include_paths => prop(mod, grp, :include_paths),
-    :defines => prop(mod, cpp, :defines),
-    :flags => prop(mod, cpp, :flags),
-    :osx_version => cpp.minimum_osx_version,
+    :dependencies => prop(grp, :dependencies),
+    :sources => prop(grp, :sources),
+    :exclude_sources => prop(grp, :exclude_sources),
+    :libraries => prop(grp, :libraries),
+    :include_paths => include_paths,
   }
+  if (cpp)
+    values[:defines] = prop(cpp, :defines)
+    values[:flags] = prop(cpp, :flags)
+    values[:osx_version] = cpp.minimum_osx_version
+  end
 
   output.if_condition(grp.condition) do
-    if (grp.debug_generate)
+    if (root_mod.debug_generate)
       d = "  " * depth
-      gen_line = d + "Generate #{grp.path} "
+      gen_line = d + "Generate #{grp.path}"
       gen_line += '-' * [0, (80 - gen_line.length)].max
       puts gen_line
       d += "  "
+
+      if (cpp)
+        puts "#{d}  with cpp #{cpp.path}"
+      end
+
+      if (grp.resolve_parent)
+        puts "#{d}  relative to #{grp.resolve_parent.path}"
+      end
 
       values.each{ |k, v| debug_variable(d, k, v) }
       puts
     end
 
-    if (values[:sources].length > 0)
-      src = values[:sources].map do |g| 
-        path = root + "/" + g
-        if (!File.exist?(path))
-          glob = Dir[path]
-          raise "Invalid dir glob '#{path}' - no source files found" unless glob.length > 0
-          next glob
-        end
+    output.puts(grp.extra[:cmake])
 
-        next path
-      end
+    if (values[:sources] && values[:sources].length > 0)
+      neat_src = expand_sources(root, values[:sources])
+      exclude = expand_sources(root, values[:exclude_sources])
 
-      neat_src = src.flatten
-      output.append_to_variable(:sources, neat_src.join("\n  "))
+      output.append_to_variable(:sources, (neat_src - exclude).join("\n  "))
     end
 
-    if (values[:libraries].length > 0)
+    if (values[:libraries] && values[:libraries].length > 0)
       output.append_to_variable(:libraries, values[:libraries].join(" "))
     end
 
-    if (values[:include_paths].length > 0)
-      output.append_to_variable(:private_includes, values[:include_paths].map{ |i| "#{grp.root}/#{i}" }.join(" "))
+    if (values[:include_paths] && values[:include_paths].length > 0)
+      output.append_to_variable(:private_includes, values[:include_paths].join(" "))
     end
 
-    if (values[:defines].length > 0)
-      output.append_to_variable(:definitions, "\" #{values[:defines].join(" ")}\"")
-    end
 
-    if (values[:flags].length > 0)
-      values[:flags].map do |f|
-        generate_flag(output, f)
+    if (cpp)
+      if (values[:defines] && values[:defines].length > 0)
+        output.append_to_variable(:definitions, " #{values[:defines].join(" ")}")
       end
-    end
 
-    if (values[:osx_version])
-      osx_ver = "\" -mmacosx-version-min=#{values[:osx_version]}\""
-      output.append_to_variable(:compiler_options, osx_ver)
+      if (values[:flags] && values[:flags].length > 0)
+        values[:flags].map do |f|
+          generate_flag(output, f)
+        end
+      end
+
+      if (values[:osx_version])
+        osx_ver = " -mmacosx-version-min=#{values[:osx_version]}"
+        output.append_to_variable(:compiler_options, osx_ver)
+      end
     end
 
     grps = grp.is_a?(RbMake::Impl::Module) ? grp.flat_groups : grp.groups.values
     grps.each do |v|
-      generate_group(output, conf, root, v, depth + 1)
+      generate_group(generated, output, conf, root, root_mod, v, depth + 1)
     end
   end
 end
 
 class OutputFormatter
   attr_reader :output
+  attr_accessor :variables
 
-  def initialize(vars)
-    @vars = vars
+  def initialize()
+    @variables = nil
     @output = ""
     @tabs = 0
     @properties = { }
@@ -147,14 +218,14 @@ class OutputFormatter
   end
 
   def append_to_variable(var, append)
-    var_name = @vars[var]
+    var_name = @variables[var]
     raise "Invalid variable #{var}" unless var_name
-    puts("set(#{var_name} ${#{var_name}} #{append})")
+    puts("list(APPEND #{var_name} #{append})\n")
   end
 
   def puts_set_properties()
     @properties.each do |p, v|
-      puts("set_property(TARGET #{@vars[:name]} PROPERTY #{p} #{v})")
+      puts("set_property(TARGET #{@variables[:name]} PROPERTY #{p} #{v})\n")
     end
   end
 
@@ -178,13 +249,17 @@ class OutputFormatter
 end
 
 def generate(project_name, conf, reg)
-  puts "Generating cod"
+  puts "Generating cmake files"
+
+  output = OutputFormatter.new
+  output.puts("cmake_minimum_required(VERSION 3.1)\n")
+  output.puts("project(#{project_name})\n")
+  output.puts("find_package(rbmake-utils PATHS #{RbMakeCMakeLocation})\n")
+
   reg.modules.values.select{ |l| l.generate }.each do |v|
     puts "Generate #{v.name}"
 
     raise "Unable to generate modules" if v.class == RbMake::Impl::Module
-
-    header = 
 
     puts "ROOT(#{v.root})"
     puts "TARGET #{v.name}"
@@ -195,41 +270,61 @@ def generate(project_name, conf, reg)
       raise "Cannot generate non-cpp project"
     end
 
-    vars = {
+    generated = Set.new
+    output.variables = {
       :name => v.name,
       :sources => "#{v.name}_sources",
-      :public_includes => "#{v.name}_public_includes",
       :private_includes => "#{v.name}_private_includes",
       :definitions => "#{v.name}_definitions",
       :libraries => "#{v.name}_libraries",
       :compiler_options => "#{v.name}_compiler_options",
     }
 
-    output = OutputFormatter.new(vars)
-    output.puts("cmake_minimum_required(VERSION 3.1)")
-    output.puts("project(#{project_name})")
-    output.puts("find_package(rbmake-utils PATHS #{RbMakeCMakeLocation})")
-
-    generate_group(output, conf, v.root, v, 0)
+    generate_group(generated, output, conf, v.root, v, v, 0)
 
     type = TargetTypeMap[v.type]
     raise "Invalid target type #{v.type}" unless type
 
-    output.puts("add_library (#{vars[:name]} #{type} ${#{vars[:sources]}})")
-    output.puts("SET_TARGET_PROPERTIES(#{vars[:name]} PROPERTIES LINKER_LANGUAGE CXX)")
-    output.puts("SET_TARGET_PROPERTIES(#{vars[:name]} PROPERTIES COMPILE_OPTIONS ${#{vars[:compiler_options]}})")
-    output.puts("if (DEFINED #{vars[:definitions]})\n  SET_TARGET_PROPERTIES(#{vars[:name]} PROPERTIES COMPILE_DEFINITIONS ${#{vars[:definitions]}})\nendif()")
-    output.puts("target_include_directories (#{vars[:name]} PUBLIC ${#{vars[:public_includes]}} PRIVATE ${#{vars[:private_includes]}})")
+    vars = output.variables
+    output.puts(%{
+#{type[:primary]} (#{vars[:name]} 
+  #{type[:secondary]}
+    ${#{vars[:sources]}}
+  )})
+    output.puts(%{
+set_property(TARGET #{vars[:name]} PROPERTY 
+  LINKER_LANGUAGE CXX
+  )})
+    output.puts(%{
+set_property(TARGET #{vars[:name]} PROPERTY 
+  COMPILE_OPTIONS ${#{vars[:compiler_options]}}
+  )})
+    output.puts(%{
+if (DEFINED #{vars[:definitions]})
+  set_property(TARGET #{vars[:name]} PROPERTY 
+    COMPILE_DEFINITIONS ${#{vars[:definitions]}}
+    )
+endif()})
+    output.puts(%{
+target_include_directories (#{vars[:name]}
+  PRIVATE
+    ${#{vars[:private_includes]}}
+  )})
+    output.puts(%{
+target_link_libraries (#{vars[:name]}
+  LINK_PRIVATE
+    ${#{vars[:libraries]}}
+  )})
     output.puts_set_properties()
-
-
-    File.open('CMakeLists.txt', 'w') do |f|
-      f.write(output.output)
-    end
-
-    type = TypeMap[conf.type]
-    raise "Invalid type #{conf.type}" unless type
-
-    puts `cmake . -G #{type}`
   end
+
+
+  File.open('CMakeLists.txt', 'w') do |f|
+    f.write(output.output)
+  end
+
+  type = TypeMap[conf.type]
+  raise "Invalid type #{conf.type}" unless type
+
+  puts `cmake . -G #{type}`
 end

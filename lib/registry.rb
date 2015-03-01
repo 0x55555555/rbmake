@@ -12,6 +12,10 @@ class Registry
     @config = config
   end
 
+  def has_module(id)
+    return @modules.include?(id)
+  end
+
   def lookup_module(id)
     if (id == nil)
       return nil
@@ -25,7 +29,11 @@ class Registry
 
   def register_module(mod)
     puts "Registering Module #{mod.name}"
-    raise "Module #{hlp.name} re-registered" unless !@helpers.include?(mod.name)
+    if @modules.include?(mod.name)
+      a = @modules[mod.name].definition[:file]
+      b = mod.definition[:file]
+      raise "Module #{mod.name} re-registered, at both:\n#{a}\nand\n#{b}" 
+    end
     @modules[mod.name] = mod
   end
 
