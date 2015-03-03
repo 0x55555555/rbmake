@@ -32,6 +32,22 @@ module Utils
     end
   end
 
+  def self.find_best_input(input_file)
+    if (input_file == nil || (File.exist?(input_file) && Dir.exist?(input_file)))
+      path = '.'
+      if (input_file)
+        path = input_file
+      end
+
+      expanded = File.expand_path(path)
+
+      name =  File.basename(expanded)
+      input_file = expanded + "/#{name}.rb"
+    end
+    raise "Invalid input file #{input_file}" unless File.exist?(input_file)
+    return input_file
+  end
+
 end
 end
 end

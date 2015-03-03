@@ -28,7 +28,7 @@ class Module < Group
 
     @root = Pathname.new(File.dirname(file))
       .relative_path_from(Pathname.new(root))
-      .cleanpath.to_s
+      .cleanpath.to_s + '/'
 
     @registry.register_module(self)
     block.call(self, parent)

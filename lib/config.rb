@@ -4,15 +4,15 @@ module RbMake
 module Impl
 
 class Config
-  attr_reader :build_root, :type
+  attr_reader :build_root, :debug_registry
 
   Types = [
     :xcode,
   ]
 
-  def initialize(build_root, type)
+  def initialize(build_root, debug_registry = false)
     @build_root = File.expand_path(build_root)
-    @type = type
+    @debug_registry = debug_registry
     puts "Source build_root set to #{@build_root}"
   end
 

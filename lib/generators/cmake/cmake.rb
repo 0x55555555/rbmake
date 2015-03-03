@@ -6,11 +6,13 @@ $:.unshift File.dirname(__FILE__)
 RbMakeCMakeLocation = File.dirname(__FILE__)
 
 TypeMap = {
-  :xcode => 'Xcode'
+  :xcode => 'Xcode',
+  :make => '"Unix Makefiles"',
 }
 
 TargetTypeMap = {
   :dummy => nil,
+  :test => { :primary => 'add_executable' },
   :application => { :primary => 'add_executable' },
   :dynamic_library => { :primary => 'add_library', :secondary => 'SHARED' },
   :static_library => { :primary => 'add_library', :secondary => 'STATIC' },
@@ -248,22 +250,26 @@ class OutputFormatter
   end
 end
 
-def generate(project_name, conf, reg)
+def generate_cmake(project_name, conf, reg, input_type)
   puts "Generating cmake files"
 
   output = OutputFormatter.new
   output.puts("cmake_minimum_required(VERSION 3.1)\n")
+  output.puts("enable_testing()\n")
   output.puts("project(#{project_name})\n")
   output.puts("find_package(rbmake-utils PATHS #{RbMakeCMakeLocation})\n")
 
+
   reg.modules.values.select{ |l| l.generate }.each do |v|
-    puts "Generate #{v.name}"
 
     raise "Unable to generate modules" if v.class == RbMake::Impl::Module
 
-    puts "ROOT(#{v.root})"
-    puts "TARGET #{v.name}"
-    puts "TYPE(#{v.type})"
+    if (v.debug_generate)
+      puts "Generate #{v.name}"
+      puts "ROOT(#{v.root})"
+      puts "TARGET #{v.name}"
+      puts "TYPE(#{v.type})"
+    end
 
     cpp = v.first_helper(:cpp)
     if (!cpp)
@@ -291,6 +297,9 @@ def generate(project_name, conf, reg)
   #{type[:secondary]}
     ${#{vars[:sources]}}
   )})
+    if (v.type == :test)
+      output.puts("add_test(#{vars[:name]} #{vars[:name]})")
+    end
     output.puts(%{
 set_property(TARGET #{vars[:name]} PROPERTY 
   LINKER_LANGUAGE CXX
@@ -323,8 +332,12 @@ target_link_libraries (#{vars[:name]}
     f.write(output.output)
   end
 
-  type = TypeMap[conf.type]
-  raise "Invalid type #{conf.type}" unless type
+  type = TypeMap[input_type]
+  raise "Invalid type #{input_type}" unless type
 
-  puts `cmake . -G #{type}`
+  out = `cmake . -G #{type}`
+  if ($?.exitstatus != 0)
+    puts "Error running cmake"
+    puts out
+  end
 end
