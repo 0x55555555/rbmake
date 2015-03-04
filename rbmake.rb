@@ -2,7 +2,6 @@
 
 require 'set'
 require 'pathname'
-require 'Readline'
 
 $:.unshift File.dirname(__FILE__) + '/lib'
 
