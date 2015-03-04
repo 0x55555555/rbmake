@@ -19,10 +19,14 @@ def self.test(name, parent=nil, &blk)
   test_name = (name.to_s + "Test").to_sym
   parent_object = $registry.lookup_module(parent)
   impl = Impl::Library.new($registry, test_name, parent_object)
-  impl.build(caller, blk)
 
-  impl.type = :test
-  impl.dependencies << name
+  full_blk = Proc.new do |l, p|
+    blk.call(l, p)  
+    impl.type = :test
+    impl.dependencies << name
+  end
+
+  impl.build(caller, full_blk) 
 end
 
 def self.import_module(name, raise_on_fail=true)

@@ -19,6 +19,11 @@ TargetTypeMap = {
   :module => { :primary => 'add_library', :secondary => 'MODULE' },
 }
 
+BuildVariants = {
+  :debug => "Debug",
+  :release => "Release",
+}
+
 def prop(obj, prop)
   raise "Invalid object" unless obj
   this = obj.method(prop).call
@@ -250,7 +255,7 @@ class OutputFormatter
   end
 end
 
-def generate_cmake(project_name, conf, reg, input_type)
+def generate_cmake(project_name, conf, reg, input_type, variant)
   puts "Generating cmake files"
 
   output = OutputFormatter.new
@@ -286,7 +291,9 @@ def generate_cmake(project_name, conf, reg, input_type)
       :compiler_options => "#{v.name}_compiler_options",
     }
 
-    generate_group(generated, output, conf, v.root, v, v, 0)
+    clean_root = v.root.gsub(/[\\\/]+/, '/')
+
+    generate_group(generated, output, conf, clean_root, v, v, 0)
 
     type = TargetTypeMap[v.type]
     raise "Invalid target type #{v.type}" unless type
@@ -300,6 +307,9 @@ def generate_cmake(project_name, conf, reg, input_type)
     if (v.type == :test)
       output.puts("add_test(#{vars[:name]} #{vars[:name]})")
     end
+
+    output.puts(%{
+make_source_groups("#{clean_root}" "${#{vars[:sources]}}")})
     output.puts(%{
 set_property(TARGET #{vars[:name]} PROPERTY 
   LINKER_LANGUAGE CXX
@@ -335,7 +345,7 @@ target_link_libraries (#{vars[:name]}
   type = TypeMap[input_type]
   raise "Invalid type #{input_type}" unless type
 
-  out = `cmake . -G #{type}`
+  out = `cmake . -G #{type} -DCMAKE_BUILD_TYPE=#{BuildVariants[variant]}`
   if ($?.exitstatus != 0)
     puts "Error running cmake"
     puts out

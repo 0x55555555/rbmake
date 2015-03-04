@@ -20,3 +20,16 @@ elseif(UNIX)
 else()
   message( FATAL_ERROR "Invalid platform." )
 endif()
+
+function(make_source_groups PREFIX SOURCES)
+  foreach(FILE ${SOURCES}) 
+    get_filename_component(GROUP "${FILE}" PATH)
+
+    # skip src or include and changes /'s to \\'s
+    # string(REGEX REPLACE "(\\./)?(src|include)/?" "" GROUP "${GROUP}")
+    string(REPLACE ${PREFIX} "" GROUP "${GROUP}")
+    string(REPLACE "/" "\\" GROUP "${GROUP}")
+
+    source_group("${GROUP}" FILES "${FILE}")
+  endforeach()
+endfunction()

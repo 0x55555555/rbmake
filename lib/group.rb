@@ -13,21 +13,22 @@ class Group
 
   def initialize(registry, mod, name, parent, resolve_parent)
     @registry = registry
-
-    @helpers = { }
-    if (parent)
-      parent.helpers.each do |k, v|
-        parent_obj = resolve_parent ? v : nil
-        add_helper(k, v.class.new(self, parent_obj, nil))
-      end
-    end
-
     @extra = { }
     @groups = { }
     @name = name
     @parent = parent
     @resolve_parent = resolve_parent
     @owner_module = mod
+
+    @helpers = { }
+    if (parent)
+      parent.helpers.each do |k, v|
+        parent_obj = parent ? v : nil
+        resolve_parent_obj = resolve_parent ? v : nil
+        add_helper(k, v.class.new(self, parent_obj, nil))
+      end
+    end
+
     raise "Invalid owner" if !@owner_module
     if (parent == nil)
       @source = []
