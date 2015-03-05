@@ -350,5 +350,6 @@ target_link_libraries (#{vars[:name]}
   if ($?.exitstatus != 0)
     puts "Error running cmake"
     puts out
+    exit $?.exitstatus
   end
 end
