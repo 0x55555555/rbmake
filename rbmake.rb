@@ -36,8 +36,10 @@ end
 if (command == :build)
   generate_cmake(File.basename(input_file, ".*"), conf, registry, :make, variant)
   system("make")
+  return $?.exitstatus
 end
 
 if (command == :test)
   system("make test")
+  return $?.exitstatus
 end

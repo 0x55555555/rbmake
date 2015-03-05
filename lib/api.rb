@@ -62,4 +62,8 @@ def self.import_modules(pattern)
   end
 end
 
+def self.module_exists?(mod)
+  return $registry.has_module(mod)
+end
+
 end
