@@ -262,8 +262,8 @@ def generate_cmake(project_name, conf, reg, input_type, variant)
   output.puts("cmake_minimum_required(VERSION 3.1)\n")
   output.puts("enable_testing()\n")
   output.puts("project(#{project_name})\n")
-  output.puts("set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} #{RbMakeCMakeLocation})")
-  output.puts("find_package(rbmake-utils)\n")
+  output.puts("set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} #{RbMakeCMakeLocation})")
+  output.puts("find_package(rbmake-utils REQUIRED)\n")
 
 
   reg.modules.values.select{ |l| l.generate }.each do |v|
