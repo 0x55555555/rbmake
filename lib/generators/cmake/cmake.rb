@@ -263,6 +263,7 @@ def generate_cmake(project_name, conf, reg, input_type, variant)
   output.puts("enable_testing()\n")
   output.puts("project(#{project_name})\n")
   output.puts("set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} #{RbMakeCMakeLocation})")
+  output.puts("set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} #{RbMakeCMakeLocation}/cmake-modules/)")
   output.puts("find_package(rbmake-utils REQUIRED)\n")
 
 
