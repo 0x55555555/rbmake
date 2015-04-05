@@ -72,7 +72,12 @@ class Group
 
     grp = lookup_group(name)
     if (grp == nil)
-      parent_group = @parent ? @parent.lookup_group(name) : nil
+      parent_group = nil
+      group_ancestor = @parent
+      while (group_ancestor && !parent_group)
+        parent_group = group_ancestor.lookup_group(name)
+        group_ancestor = group_ancestor.parent
+      end
       grp = Group.new(@registry, @owner_module, name, parent_group, nil)
 
       @helpers.each do |k, v|

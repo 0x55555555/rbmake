@@ -21,7 +21,7 @@ if (!Commands.include?(command))
   raise "Invalid command '#{command}'"
 end
 
-conf = RbMake::Impl::Config.new(File.expand_path('.'))
+conf = RbMake::Impl::Config.new(File.expand_path('.'), false)
 input_file = RbMake::Impl::Utils::find_best_input(ARGV[1])
 puts "Running rbmake for #{input_file}"
 puts "  from #{conf.build_root}"

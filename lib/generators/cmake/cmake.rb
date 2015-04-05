@@ -266,7 +266,6 @@ def generate_cmake(project_name, conf, reg, input_type, variant)
   output.puts("set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} #{RbMakeCMakeLocation}/cmake-modules/)")
   output.puts("find_package(rbmake-utils REQUIRED)\n")
 
-
   reg.modules.values.select{ |l| l.generate }.each do |v|
 
     raise "Unable to generate modules" if v.class == RbMake::Impl::Module
